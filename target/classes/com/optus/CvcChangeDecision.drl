@@ -1,0 +1,220 @@
+package com.optus;
+
+import java.util.Date;
+
+rule "CalculateChangeSize"
+    ruleflow-group "fc-bw-rule"
+	salience 7
+	no-loop true
+	
+	when 
+	    $cvcChange: CvcChange( $curBandwidth: currentBandwidth, $newBandwidth: newBandwidth) 
+	    $record: NbnCvcRecord() from $cvcChange.nbnCvc
+	    $nbnBw: Bandwidth() from $record.currentBandwidth
+	    then
+	    System.out.println("input bandwith " + $curBandwidth + " new bandwidth " + $newBandwidth + " nbn bandwidth " + $nbnBw);
+	    insert ($record);
+end
+
+rule "LogTcLimit"
+    ruleflow-group "fc-bw-rule"
+	salience 7
+	no-loop true
+	
+	when 
+	    $tcLimit: TcBwLimit()
+	then
+	    System.out.println("found TC limit " + $tcLimit );
+end
+
+rule "CvcChangeUnit"
+    ruleflow-group "fc-bw-rule"
+	salience 7
+	no-loop true
+	
+	when 
+	    $cvcChange: CvcChange(newBandwidth.unit != "Mbps") 
+	then
+	    $cvcChange.setResizeAction("None");
+	    update( $cvcChange );
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("cvc change unit not valid");
+	    System.out.println( "cvc change unit not valid" );
+	    insert(error);
+	    
+end
+
+rule "CvcNoChange"
+    ruleflow-group "fc-bw-rule"
+	salience 7
+	no-loop true
+	when 
+	    NbnCvcRecord($nbnBw: currentBandwidth) 
+	    $cvcChange: CvcChange(
+	        $nbnBw.tc1 == newBandwidth.tc1 && $nbnBw.tc2 == newBandwidth.tc2 && $nbnBw.tc4 == newBandwidth.tc4) 
+	then
+	    $cvcChange.setResizeAction("None");
+	    update( $cvcChange );
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("Source and Target TC values are the same");
+	    System.out.println( "Source and Target TC values are the same " + $cvcChange.getCvcId() );
+	    insert(error);
+	    
+end
+
+rule "CvcUpgrade"
+    ruleflow-group "fc-bw-rule"
+	salience 7
+	no-loop true
+	
+	when 
+	    NbnCvcRecord($nbnBw: currentBandwidth) 
+	    $cvcChange: CvcChange(resizeAction == "Upgrade",
+	        $nbnBw.tc1 > newBandwidth.tc1 || $nbnBw.tc2 > newBandwidth.tc2 || $nbnBw.tc4 > newBandwidth.tc4) 
+	then
+	    $cvcChange.setResizeAction("None");
+	    update( $cvcChange );
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("cvc change action Upgrade does not match with the values");
+	    System.out.println( "cvc change action Upgrade does not match with the values " + $cvcChange.getCvcId() );
+	    insert(error);
+	    
+end
+
+rule "CvcDowngrade"
+    ruleflow-group "fc-bw-rule"
+	salience 7
+	no-loop true
+	
+	when 
+	    NbnCvcRecord($nbnBw: currentBandwidth) 
+	    $cvcChange: CvcChange( resizeAction == "Downgrade",
+	        $nbnBw.tc1 < newBandwidth.tc1 || $nbnBw.tc2 < newBandwidth.tc2 || $nbnBw.tc4 < newBandwidth.tc4) 
+	then
+	    $cvcChange.setResizeAction("None");
+	    update( $cvcChange );
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("cvc change action Downgrade does not match with the values");
+	    System.out.println( "cvc change action Downgrade does not match with the values " + $cvcChange.getCvcId() );
+	    insert(error);
+end
+
+
+rule "NoneIfDowngradeZeroTC1"
+    ruleflow-group "fc-bw-rule"
+	salience 7
+	no-loop true
+	
+	when 
+	    NbnCvcRecord($nbnBw: currentBandwidth) 
+	    $cvcChange: CvcChange( newBandwidth.tc1 <= 0, $nbnBw.tc1 > 0 ) 
+	then
+	    $cvcChange.setResizeAction("None");
+	    update( $cvcChange );
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("TC1 can not be downgraded to 0");
+	    insert(error);
+end
+
+rule "NoneIfDowngradeZeroTC2"
+    ruleflow-group "fc-bw-rule"
+	salience 7
+	no-loop true
+	
+	when 
+	    NbnCvcRecord($nbnBw: currentBandwidth) 
+	    $cvcChange: CvcChange( newBandwidth.tc2 <= 0, $nbnBw.tc2 > 0 ) 
+	then
+	    $cvcChange.setResizeAction("None");
+	    update( $cvcChange );
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("TC2 can not be downgraded to 0");
+	    insert(error);
+end
+
+rule "NoneIfDowngradeZeroTC4"
+    ruleflow-group "fc-bw-rule"
+	salience 7
+	no-loop true
+	
+	when 
+	    NbnCvcRecord($nbnBw: currentBandwidth) 
+	    $cvcChange: CvcChange( newBandwidth.tc4 <= 0, $nbnBw.tc4 > 0 ) 
+	then
+	    $cvcChange.setResizeAction("None");
+	    update( $cvcChange );
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("TC4 can not be downgraded to 0");
+	    insert(error);
+end
+
+rule "NoneIfTc1"
+    ruleflow-group "fc-bw-rule"
+	salience 6
+	no-loop true
+	
+	when 
+	    NbnCvcRecord($nbnBw: currentBandwidth) 
+	    $limit: TcBwLimit( tc == "TC1" )
+	    $cvcChange: CvcChange( resizeAction == $limit.resizeAction,
+	        eval( Math.abs(newBandwidth.tc1 - $nbnBw.tc1) > $limit.max ) )
+	then
+	    $cvcChange.setResizeAction("None");
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("tc1 " + $limit.getResizeAction() + " size limit exceeded");
+	    insert(error);
+end
+
+rule "NoneIfTc2"
+    ruleflow-group "fc-bw-rule"
+	salience 6
+	no-loop true
+	
+	when 
+	    NbnCvcRecord($nbnBw: currentBandwidth) 
+	    $limit: TcBwLimit( tc == "TC2" )
+	    $cvcChange: CvcChange( resizeAction == $limit.resizeAction,
+	        eval( Math.abs(newBandwidth.tc2 - $nbnBw.tc2) > $limit.max ) )
+	then
+	    $cvcChange.setResizeAction("None");
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("tc2 " + $limit.getResizeAction() + " size limit exceeded");
+	    insert(error);
+end
+
+rule "NoneIfTc4"
+    ruleflow-group "fc-bw-rule"
+	salience 6
+	no-loop true
+	
+	when 
+	    NbnCvcRecord($nbnBw: currentBandwidth) 
+	    $limit: TcBwLimit( tc == "TC4" )
+	    $cvcChange: CvcChange( resizeAction == $limit.resizeAction,
+	        eval( Math.abs(newBandwidth.tc4 - $nbnBw.tc4) > $limit.max ) )
+	then
+	    $cvcChange.setResizeAction("None");
+	    BwChangeException error = new BwChangeException(); 
+	    //error.setCreatedAt( new Date() ); 
+	    error.setSystem("validation-rule");
+	    error.setMessage("tc4 " + $limit.getResizeAction() + " size limit exceeded");
+	    insert(error);
+end
